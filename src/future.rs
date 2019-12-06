@@ -44,13 +44,13 @@ impl<T: Generator<Yield = ()>> Future for GenFuture<T> {
 }
 
 #[thread_local]
-static TLS_CX: Cell<Option<NonNull<Context<'static>>>> = Cell::new(None);
+static TLS_CX: Cell<NonNull<Context<'static>>> = Cell::new(NonNull::dangling());
 
-struct SetOnDrop(Option<NonNull<Context<'static>>>);
+struct SetOnDrop(NonNull<Context<'static>>);
 
 impl Drop for SetOnDrop {
     fn drop(&mut self) {
-        TLS_CX.set(self.0.take());
+        TLS_CX.set(self.0);
     }
 }
 
@@ -59,7 +59,7 @@ impl Drop for SetOnDrop {
 unsafe fn set_task_context(cx: &mut Context<'_>) -> SetOnDrop {
     // transmute the context's lifetime to 'static so we can store it.
     let cx = core::mem::transmute::<&mut Context<'_>, &mut Context<'static>>(cx);
-    let old_cx = TLS_CX.replace(Some(NonNull::from(cx)));
+    let old_cx = TLS_CX.replace(NonNull::from(cx));
     SetOnDrop(old_cx)
 }
 
@@ -71,12 +71,8 @@ where
 {
     // Clear the entry so that nested `get_task_waker` calls
     // will fail or set their own value.
-    let cx_ptr = TLS_CX.replace(None);
+    let mut cx_ptr = TLS_CX.get();
     let _reset = SetOnDrop(cx_ptr);
-
-    let mut cx_ptr = cx_ptr.expect(
-        "TLS Context not set. This is a rustc bug. \
-        Please file an issue on https://github.com/rust-lang/rust.");
 
     // Safety: we've ensured exclusive access to the context by
     // removing the pointer from TLS, only to be replaced once
