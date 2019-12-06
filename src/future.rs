@@ -43,14 +43,17 @@ impl<T: Generator<Yield = ()>> Future for GenFuture<T> {
     }
 }
 
-#[thread_local]
-static TLS_CX: Cell<NonNull<Context<'static>>> = Cell::new(NonNull::dangling());
+#[cfg_attr(feature = "tls", thread_local)]
+static mut TLS_CX: Cell<NonNull<Context<'static>>> = Cell::new(NonNull::dangling());
 
 struct SetOnDrop(NonNull<Context<'static>>);
 
 impl Drop for SetOnDrop {
     fn drop(&mut self) {
-        TLS_CX.set(self.0);
+        #[allow(unused_unsafe)]
+        unsafe {
+            TLS_CX.set(self.0);
+        }
     }
 }
 
@@ -71,7 +74,8 @@ where
 {
     // Clear the entry so that nested `get_task_waker` calls
     // will fail or set their own value.
-    let mut cx_ptr = TLS_CX.get();
+    #[allow(unused_unsafe)]
+    let mut cx_ptr = unsafe { TLS_CX.get() };
     let _reset = SetOnDrop(cx_ptr);
 
     // Safety: we've ensured exclusive access to the context by
