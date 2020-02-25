@@ -3,7 +3,6 @@
 use core::cell::Cell;
 use core::marker::Unpin;
 use core::pin::Pin;
-use core::option::Option;
 use core::ptr::NonNull;
 use core::task::{Context, Poll};
 use core::ops::{Drop, Generator, GeneratorState};
